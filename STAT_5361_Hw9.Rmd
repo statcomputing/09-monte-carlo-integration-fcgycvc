@@ -1,0 +1,198 @@
+---
+title: "STAT_5361_Hw9"
+author: "Yicheng Guo"
+date: "2020/11/11"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Ex 7.5.1
+
+## (1)
+
+Pdf of x is
+
+$$
+f(x) = \frac{1}{5\sqrt{2\pi}}x^2 e^{-\frac{(x-2)^2}{2}}, \qquad -\infty <x < \infty.
+$$
+
+So  
+
+$$
+E(x^2) = \int_{-\infty}^\infty x^2 f(x) dx
+$$
+
+Now g(x) is standard normal,
+
+$$
+E(x_i^2) \approx \frac1n \sum\frac{x_i^4e^{-\frac{(x_i-2)^2}{2}}}{5e^{-\frac{x_i^2}{2}}} = \frac1{5n} \sum x_i^4e^{2x_i-2}, x_i \sim N(0,1)
+$$
+```{r}
+
+g1 <- function(x) x^4 * exp(2*x - 2)
+m1 <- function(x) x^3 * exp(2*x - 2)
+set.seed(7511)
+Sample751a1 <- rnorm(1000)
+Sample751a2 <- rnorm(10000)
+Sample751a3 <- rnorm(50000)
+
+est751a1 <- g1(Sample751a1)
+est751a2 <- g1(Sample751a2)
+est751a3 <- g1(Sample751a3)
+xsqresult751a <- list(mean(est751a1)/5, mean(est751a2)/5, mean(est751a3)/5)
+names(xsqresult751a) <- c("XSQEst._1000", "XSQEst._10000", "XSQEst._50000") 
+est751a1e <- m1(Sample751a1)
+est751a2e <- m1(Sample751a2)
+est751a3e <- m1(Sample751a3)
+xresult751a <- list(xsqresult751a$XSQEst._1000 - (mean(est751a1e) /5)^2,
+                   xsqresult751a$XSQEst._10000 - (mean(est751a2e) /5)^2,
+                   xsqresult751a$XSQEst._50000 - (mean(est751a3e) /5)^2)
+names(xresult751a) <- c("VarEst._1000", "VarEst._10000", "VarEst._50000") 
+xsqresult751a
+xresult751a
+```
+
+
+## (2)
+
+Take g2(x) to be N(2, 1),
+
+$$
+E(x_i^2) \approx \frac1{5n} \sum x_i^4, x_i \sim N(2,1)
+$$
+
+Compared with other possible methods, this one is most efficient in calculation, since the sampling is easy, and in estimation we only need to multiply.
+
+## (3)
+
+```{r}
+g2 <- function(x) x^4
+set.seed(7512)
+Sample751b1 <- rnorm(1000, 2)
+Sample751b2 <- rnorm(10000, 2)
+Sample751b3 <- rnorm(50000, 2)
+est751b1 <- g2(Sample751b1)
+est751b2 <- g2(Sample751b2)
+est751b3 <- g2(Sample751b3)
+xsqresult751b <- list(mean(est751b1)/5, mean(est751b2)/5, mean(est751b3)/5)
+names(xsqresult751b) <- c("XSQEst._1000", "XSQEst._10000", "XSQEst._50000") 
+xsqresult751b
+```
+
+## (4)
+```{r}
+microbenchmark::microbenchmark(g1(Sample751a1), g2(Sample751b1), times = 10000L)
+```
+
+From result in microbenchmark, we can see that the efficiency of the second method is approximately twice faster than the first one.
+
+# Ex 7.5.2
+
+## (1)
+```{r}
+s0 <- 1; r <- 0.05; n <- 12
+S <- function(t, rate, sigma, s0) s0 * exp((rate - 0.5 * sigma^2) * t + sigma * sqrt(t) * rnorm(1))
+S_PATH <- function(n, t, rate, sigma, s0){
+  Path <- vector(length = n)
+  Path[1] <- S(t/n, rate, sigma, s0)
+  for (i in 2:n) {
+    temp <- Path[i-1]
+    Path[i] <- S(t/n, rate, sigma, temp)
+  }
+  return(Path)
+}
+```
+
+## (2)
+
+Write simulation function and correlation-summary function.
+```{r}
+SingleSIMU <- function(n, t, rate, sigma, s0, K){
+  PATH <- S_PATH(n, t, rate, sigma, s0)
+  SA <- mean(PATH); SG <- prod(S_PATH(n, t, rate, sigma, s0))^(1/n)
+  v <- exp(-1 * rate * t)
+  PA_Num <- v * max(SA - K, 0)
+  PG_Num <- v * max(SG - K, 0) 
+  PE_Num <- v * max(PATH[n] - K, 0)
+  result <- list(PA_Num, PG_Num, PE_Num, PATH[n])
+  names(result) <- c("PAVal", "PGVal", "PEVal", "S_T")
+  return(result)
+}
+MultiSIMU <- function(sample_size, n, t, rate, sigma, s0, K){
+  result <- SingleSIMU(n, t, rate, sigma, s0, K)
+  for(i in 1:sample_size){
+    temp <- SingleSIMU(n, t, rate, sigma, s0, K)
+    result$PAVal <- append(result$PAVal, temp$PAVal)
+    result$PGVal <- append(result$PGVal, temp$PGVal)
+    result$PEVal <- append(result$PEVal, temp$PEVal)
+    result$S_T <- append(result$S_T, temp$S_T)
+  }
+  return(result)
+}
+SummaryofP2cor <- function(P){
+  L1 <- cor(P$PAVal, P$PGVal); L2 <- cor(P$PAVal, P$PEVal)
+  L3 <- cor(P$PAVal, P$S_T)
+  result <- list(L1, L2, L3)
+  names(result) <- c('cor_with_PGVal', 'cor_with_PEVal', 'cor_with_ST')
+  return(result)
+}
+```
+
+Initial value for (2) and simulate:
+```{r}
+K2 <- seq(1.1, 1.5, 0.1); sigma2 <- 0.5; T2 <- 1
+set.seed(7521)
+P2Q2K1.1 <- MultiSIMU(5000, n, T2, r, sigma2, s0, K2[1])
+P2Q2K1.2 <- MultiSIMU(5000, n, T2, r, sigma2, s0, K2[2])
+P2Q2K1.3 <- MultiSIMU(5000, n, T2, r, sigma2, s0, K2[3])
+P2Q2K1.4 <- MultiSIMU(5000, n, T2, r, sigma2, s0, K2[4])
+P2Q2K1.5 <- MultiSIMU(5000, n, T2, r, sigma2, s0, K2[5])
+SummaryofP2cor(P2Q2K1.1)
+SummaryofP2cor(P2Q2K1.2)
+SummaryofP2cor(P2Q2K1.3)
+SummaryofP2cor(P2Q2K1.4)
+SummaryofP2cor(P2Q2K1.5)
+```
+
+From the result, we can see that as K increase, $P_A$'s correlation coefficient with $S(T)$ and $P_E$ are decreasing(not that apparent for $P_E$ in my trial sampling process), and with $P_G$ is always approximately 0.
+
+## (3)
+In (3) and (4), codes are similar to that of (2) except initial value.
+```{r}
+  #Q3
+K3 <- 1.5; sigma3 <- seq(0.2, 0.5, 0.1); T3 <- 1
+set.seed(7523)
+P2Q3s0.2 <- MultiSIMU(5000, n, T3, r, sigma3[1], s0, K3)
+P2Q3s0.3 <- MultiSIMU(5000, n, T3, r, sigma3[2], s0, K3)
+P2Q3s0.4 <- MultiSIMU(5000, n, T3, r, sigma3[3], s0, K3)
+P2Q3s0.5 <- MultiSIMU(5000, n, T3, r, sigma3[4], s0, K3)
+SummaryofP2cor(P2Q3s0.2)
+SummaryofP2cor(P2Q3s0.3)
+SummaryofP2cor(P2Q3s0.4)
+SummaryofP2cor(P2Q3s0.5)
+```
+
+From the results, we can see that as $\sigma$ increase, $P_A$'s correlation coefficient with $S(T)$ and $P_E$ are increasing, and with $P_G$ is always approximately 0.
+
+## (4)
+```{r}
+K4 <- 1.5; sigma4 <- 0.5; T4 <- seq(0.4, 1.6, 0.3)
+set.seed(7524)
+P2Q4t0.4 <- MultiSIMU(5000, n, T4[1], r, sigma4, s0, K4)
+P2Q4t0.7 <- MultiSIMU(5000, n, T4[2], r, sigma4, s0, K4)
+P2Q4t1.0 <- MultiSIMU(5000, n, T4[3], r, sigma4, s0, K4)
+P2Q4t1.3 <- MultiSIMU(5000, n, T4[4], r, sigma4, s0, K4)
+P2Q4t1.6 <- MultiSIMU(5000, n, T4[5], r, sigma4, s0, K4)
+SummaryofP2cor(P2Q4t0.4)
+SummaryofP2cor(P2Q4t0.7)
+SummaryofP2cor(P2Q4t1.0)
+SummaryofP2cor(P2Q4t1.3)
+SummaryofP2cor(P2Q4t1.6)
+```
+
+we can see that as time increase, $P_A$'s correlation coefficient with $S(T)$ and $P_E$ are increasing, and with $P_G$ is always approximately 0.
+
+## (5)
